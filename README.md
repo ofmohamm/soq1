@@ -1,4 +1,4 @@
-# SOQv1
+# SOQ1
 
 SOQ is a Kinect-audio tracking demo with a live visualizer.
 
