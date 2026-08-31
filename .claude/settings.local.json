@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c \" import json,sys nb=json.load\\(sys.stdin\\) cells=nb['cells'] print\\(f'Total cells: {len\\(cells\\)}'\\) for i,c in enumerate\\(cells\\): src=''.join\\(c['source']\\)[:200] print\\(f'[{i}] {c[\\\\\"cell_type\\\\\"]}: {src[:150]}'\\) print\\(\\) \")",
+      "Bash(python3 -c ' *)",
+      "Bash(python3 -c \" import json,sys nb=json.load\\(sys.stdin\\) cells=nb['cells'] print\\(f'Total cells: {len\\(cells\\)}'\\) for i,c in enumerate\\(cells\\): src=''.join\\(c['source']\\)[:180] print\\(f'[{i}] {c[\\\\\"cell_type\\\\\"]}: {src[:160]}'\\) print\\(\\) \")",
+      "Bash(python3 *)"
+    ]
+  }
+}

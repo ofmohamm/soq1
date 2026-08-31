@@ -1,0 +1,195 @@
+Audio Source Tracking System Using the Xbox 360 Kinect Sensor
+Sawyer Falkenbush
+Omar Mohammed
+Quintin Hatzis
+ELE 392 – DSP and Control Systems Laboratory
+April 26, 2026
+
+
+
+
+Table of Contents
+Table of Contents …………………………………………………………………………………2
+I. Introduction …………………………………………………………………………………….3
+II. Ethical Justification of the Project …………………………………………………………….4
+III. Description of Design Results ………………………………………………………………..8
+IV. Assessment of Experimental Results ………………………………………………………..13
+V. Conclusion ……………………………………………………………………………………18
+
+
+
+
+I. Introduction
+
+Sound source localization is a fundamental problem in signal processing with broad applications in surveillance and industrial monitoring. The ability to identify and physically track the direction of an audio source in real time opens avenues for automated camera steering and remote leak detection in industrial environments. Despite the maturity of the underlying signal processing theory, most commercial solutions remain expensive, proprietary, and difficult to integrate into student-accessible platforms.
+
+This project presents the design, implementation, and evaluation of an automated audio source tracking system built around the Xbox Kinect 360 sensor. The Kinect v1 contains a linear array of four microphones spaced 0.226 m apart and was originally designed for voice recognition in gaming. We repurpose this hardware to demonstrate closed-loop servo tracking and real-time direction-of-arrival estimation of sound.
+
+The system works as a pipeline of stages. First, raw four-channel audio is captured from the Kinect at 16 kHz using a C program built on the libfreenect open-source driver. Next, a Python processing script applies the Generalized Cross-Correlation with Phase Transform (GCC-PHAT) algorithm to the outer two microphones to compute the time difference of arrival (TDOA) of the loudest sound source. The estimated angle of arrival is then converted into an error signal, which is transmitted over a serial link to an ItsyBitsy M4 microcontroller. The microcontroller runs a PD control loop that steers a pan servo toward the source. An Adafruit BNO055 inertial measurement unit (IMU), mounted on the 3D-printed sensor bracket, reports the actual heading of the sensor back to the Python script so the system knows where it is pointing. Finally, a desktop visualizer receives telemetry data over UDP and displays a live graph of the tracking error, the audio output level, and the estimated direction of the sound source.
+
+The remainder of this report is organized as follows. Section II provides an ethical justification of our project using the IEEE Code of Ethics and the Markkula Center's Framework for Thinking Ethically. Section III gives a step-by-step description of our design, covering the hardware, signal processing, control system, and data visualization. Section IV assesses the experimental results, including PD controller tuning and overall tracking accuracy.
+
+
+
+
+II. Ethical Justification of the Project
+
+The main reason we built this project is that the technology behind sound source tracking should not be exclusive to organizations that can afford expensive commercial systems. These systems are used in conference rooms, military surveillance platforms, and industrial monitoring, but the average engineering student has no way to experiment with this technology without spending thousands of dollars. By building a working system out of a Kinect sensor that can be found on eBay for cheap, an Arduino-compatible microcontroller, a servo motor, and open-source software, we are demonstrating that the barrier to entry for this kind of work can be almost nothing. The more people who can study and build on this technology, the more it improves and the wider the range of problems it can address.
+
+Beyond the educational value, the project has the potential to improve safety. Gas leaks in pipelines and chemical plants produce sounds that humans struggle to detect, especially in noisy environments. An automated system that can steer a camera or sensor toward the source of a sound could speed up response times and keep workers out of dangerous areas. Speaker tracking for people with hearing impairments is another application, where a directional microphone or camera that follows the active speaker could make conversation much more accessible. These are not hypothetical benefits but practical problems that a system like ours could help address.
+
+IEEE Code of Ethics
+
+Two provisions from the IEEE Code of Ethics are particularly relevant to what we built and why. Provision 1 states that IEEE members commit to making engineering decisions consistent with the safety, health, and welfare of the public, and to disclosing factors that might endanger the public or the environment. We took this seriously in our design. When the audio signal drops below a set detection threshold, the controller receives a zero-error command and the servo holds its current position rather than moving randomly. The software also monitors whether the IMU heading data is fresh, and if no valid heading has arrived for more than 0.75 seconds, the system flags it and stops acting on that data. These are straightforward features, but they represent a deliberate choice to make the system fail safely rather than fail unpredictably, which is exactly what Provision 1 calls for.
+
+Provision 5 says that IEEE members commit to improving the understanding of technology, its appropriate application, and potential consequences. This project is fundamentally about learning and teaching. Every component of the system, including the GCC-PHAT algorithm, the PD controller, and the visualizer, was chosen because it represents a concept in signal processing or control systems that we wanted to understand more deeply. The visualizer was designed not just to look good but to be educational, displaying the direction of the sound source, the decibel level, and the tracking error simultaneously so that anyone watching can see exactly what the system is doing and why. The entire codebase is published on GitHub with documentation so that other students can pull it down, read through it, and build their own version. This is what Provision 5 is about: not only improving your own understanding, but improving the understanding of everyone who uses your work after you.
+
+Markkula Framework for Thinking Ethically
+
+The Markkula Center's Framework for Thinking Ethically provides several ethical lenses for evaluating decisions, two of which apply well to our project. The Utilitarian Lens asks which action produces the best balance of benefit over harm for the most people. The stakeholders for this project include our team, future students or engineers who might use our work as a reference, and the open-source community on GitHub. The costs are small: the hardware is inexpensive, the software is free, and the physical risks are minimal since the servo motor is low torque and all audio processing is local with no data stored or transmitted externally. The potential benefits are substantial, providing educational value for anyone studying DSP or control systems and contributing a well-documented open-source project to the broader community. Weighing the costs against the benefits, this project clearly produces more good than harm.
+
+The Common Good Lens focuses on whether an action contributes to conditions that support everyone's welfare. Open-source engineering projects contribute to the common good in a direct way: they expand the pool of shared knowledge that anyone can draw from. When a student at another university, or a hobbyist working on their own, can download our repository and build a working audio tracker, that is a concrete addition to the collective knowledge base. Closed systems do not do this. They solve a problem for whoever can afford them and keep the underlying knowledge proprietary. Our project does the opposite, and in doing so it strengthens the engineering community as a whole, which is exactly what the Common Good Lens values.
+
+
+
+
+III. Description of Design Results
+
+This section walks through each stage of the system in order, from hardware assembly to real-time visualization.
+
+Hardware Setup
+
+The physical system consists of five main components: an Xbox Kinect 360 sensor, a standard pan servo motor, an ItsyBitsy M4 microcontroller, an Adafruit BNO055 IMU, and a laptop connected to both the Kinect and the microcontroller via USB.
+
+The Kinect sits on top of the servo motor via a custom 3D-printed bracket, so when the servo rotates, the entire microphone array rotates with it. This is important because the tracking strategy is to physically point the Kinect toward the sound source rather than relying on software steering alone. The BNO055 IMU is mounted on the same bracket as the Kinect so that it measures the actual direction the sensor is pointing, providing real heading feedback to the processing script.
+
+Figure 1. 3D-printed mounting brackets for the servo motor and the Kinect sensor
+
+Two bracket versions were designed. The first prototype, printed in red, held the sensor in place but had no screw holes to secure it tightly, which caused the Kinect to shift during operation. The screw heads also protruded and made contact with the motor housing. The second version, printed in blue, addressed both issues by adding proper recessed screw holes and using shorter screws that do not interfere with the motor. The blue bracket is what was used for all testing and demonstration.
+
+Because the Kinect 360 was designed to work with the Xbox 360 console, using it with a laptop requires an adapter. The adapter provides external power to the Kinect and converts its proprietary connector to a standard USB connection.
+
+Audio Capture
+
+Once the hardware is assembled, the first step in the software pipeline is capturing audio from the Kinect. This is handled by a C program built on the libfreenect open-source library. The program opens the Kinect over USB, configures it to record four-channel audio at 16 kHz with 32-bit integer samples, and continuously writes the raw audio data to standard output (stdout).
+
+The Python processing script reads this stream from standard input (stdin) in blocks of 128 frames at a time. Each block contains samples from all four microphones. At 16 kHz, 128 frames corresponds to 8 milliseconds of audio, which is short enough to keep latency low while still providing enough data for a meaningful cross-correlation calculation.
+
+Although the Kinect has four microphones, we only use the two outermost ones. These are spaced 0.226 meters apart, which is the widest possible baseline and gives the best angular resolution. The inner microphones were not used because the wider spacing provides more accurate time-delay estimates.
+
+Direction Estimation Using GCC-PHAT
+
+With audio captured from both outer microphones, the next step is to estimate the direction the sound is coming from. We do this using the Generalized Cross-Correlation with Phase Transform, commonly called GCC-PHAT. The goal of this algorithm is to find how much time it takes for a sound to travel from one microphone to the other, known as the time difference of arrival (TDOA). Once we have the TDOA, we can calculate the angle.
+
+Here is how GCC-PHAT works, step by step:
+
+Step 1: Zero-padding. Both microphone signals are zero-padded to a combined length before processing. This is done to avoid circular correlation artifacts and to ensure the full range of possible delays can be represented.
+
+Step 2: Transform to the frequency domain. Each padded signal is transformed using a real-valued Fast Fourier Transform (FFT). This converts the time-domain audio samples into their frequency components, which is where the cross-correlation math is most efficiently computed.
+
+Step 3: Compute the cross-power spectrum. The frequency-domain representation of the first microphone signal is multiplied element-wise by the complex conjugate of the second. This operation captures how much the two signals share at each frequency and at what phase offset, which encodes the time delay.
+
+Step 4: Apply PHAT weighting. The cross-power spectrum is normalized by dividing it by its own magnitude. A small constant of about 1e-10 is added to the denominator to prevent division by zero. This normalization step is what distinguishes GCC-PHAT from a standard cross-correlation. By flattening the magnitude across all frequencies, the algorithm makes the correlation peak much sharper, which helps it find the correct delay even in a noisy or reverberant room.
+
+Step 5: Inverse FFT. Taking the Inverse FFT of the weighted cross-power spectrum produces the cross-correlation function in the time domain.
+
+Step 6: Find the peak within the valid delay range. Not all time delays are physically possible. The maximum delay a sound can produce when traveling across a 0.226-meter baseline is 0.226 divided by 343 meters per second, which equals approximately 0.659 milliseconds or about 10.5 samples at 16 kHz. We only search for the correlation peak within this range of plus or minus 10 samples. The location of the peak gives the estimated delay in samples, which is then converted to seconds.
+
+Step 7: Convert delay to angle. The angle of the sound source is computed using the formula theta = arcsin((tau * c) / d), where tau is the time delay in seconds, c is the speed of sound (343 m/s), and d is the microphone spacing (0.226 m). If the ratio (tau * c) / d is greater than 0.9, the measurement is discarded because it is too close to the edge of the array's range and is likely inaccurate.
+
+Filtering and Smoothing
+
+Raw GCC-PHAT estimates can be noisy due to room reflections and transient sounds, so several filtering steps are applied before the angle is sent to the controller.
+
+First, an exponential moving average with a smoothing factor of alpha = 0.3 is applied to the angle estimate. This blends each new measurement with the running average, which reduces jitter without introducing too much lag.
+
+Second, a consistency check is applied. The system keeps a buffer of the last three valid angle measurements. A new command is only sent to the controller if all three measurements agree within 15 degrees of each other. This prevents a single outlier measurement, such as one caused by a sudden loud noise from the wrong direction, from causing the servo to jerk unexpectedly.
+
+State Machine
+
+The system operates in three states that govern whether and how it responds to audio.
+
+In the IDLE state, the audio signal is too quiet to track reliably. The RMS energy of the audio must be above a threshold of 8,000,000 for the system to begin tracking. A 0.5-second hold timer prevents the system from rapidly switching between IDLE and TRACKING during brief pauses in sound, such as between words in speech.
+
+In the TRACKING state, valid angle estimates are coming in and commands are being sent to the controller. The servo is actively moving to follow the sound.
+
+In the LOCKED state, the servo has successfully pointed the sensor at the source. The system enters this state after the error stays within plus or minus 5 degrees for a continuous full second. When LOCKED, a green indicator appears in the visualizer. If the error drifts outside the band or the signal drops out, the system returns to TRACKING and the lock counter resets.
+
+Embedded Controller
+
+The control firmware runs on the ItsyBitsy M4 microcontroller and uses the PID_v2 library. Its job is to receive the angular error from the Python script and move the servo to reduce that error to zero.
+
+The Python script sends angle error values as plain ASCII strings over a serial connection at 115200 baud. The firmware reads each incoming string and parses it into a floating-point number. Because the servo and the microphone array have opposite rotation conventions, the sign of the error is inverted before it is used. The value is also clamped to a range of plus or minus 90 degrees to prevent the controller from issuing extreme commands.
+
+The PD control loop runs every 20 milliseconds, giving an update rate of 50 Hz. At each step, the PD algorithm computes a correction value based on the current error and the rate of change of the error. The correction is clamped to plus or minus 20 degrees per step to limit how fast the servo moves in a single update. The correction is then added to the current servo position, and the result is clamped to the physical limits of the servo, which are 0 to 180 degrees. The servo then moves to the new position.
+
+The derivative term provides damping. Without it, the servo would accelerate toward the target and overshoot. With too much derivative gain, the servo overreacts to noise in the error signal and oscillates. Finding the right balance between these two behaviors was the focus of the tuning experiments described in Section IV.
+
+The BNO055 IMU is polled every 50 milliseconds and reports the current heading of the sensor bracket over the same serial connection in a comma-separated format. The Python script reads these reports and uses the heading value to update the visualizer. If no valid IMU report has been received for more than 0.75 seconds, the heading is marked as stale and the system stops using it.
+
+Visualizer
+
+The visualizer is a desktop application built with PySide6 and QML. It receives telemetry from the Python script over a UDP connection on port 5555. The telemetry is sent as JSON packets approximately 60 times per second. A TelemetryBridge class on the receiving end parses these packets and exposes the data as Qt properties, which the QML interface binds to and displays reactively, meaning the display updates immediately whenever new data arrives.
+
+The interface is divided into three panels. The Hero Stage at the top shows a large animated view of the sensor and the sound source. A circular icon represents the Kinect, and a dot orbits around it to show the estimated direction of the sound. When a measurement is active, arcs radiate from the source toward the tracker to give a visual sense of the sound traveling through space.
+
+The Signal Panel on the lower left shows numerical metrics including the current audio level in decibels, a color-coded noise floor indicator, the current estimated angle, and the IMU connection status.
+
+The History Panel on the lower right shows a scrolling 10-second timeline of the tracking error. A green band marks the plus or minus 5-degree lock zone. When the system is in the LOCKED state, the error trace turns green. Underneath the error trace, a heatmap shows the audio energy over the same time window, so it is easy to see the relationship between signal strength and tracking quality.
+
+
+
+
+IV. Assessment of Experimental Results
+
+PD Controller Tuning
+
+We evaluated three different gain configurations by playing a sound from a fixed location and measuring how the servo responded. The test started with the servo pointing straight ahead and the sound positioned at a fixed angle offset, so the system had to detect and correct for that angle step.
+
+Configuration 1: Kp = 0.06, Kd = 0.005, Ki = 0
+
+This configuration produced the best results. The servo moved smoothly toward the target with no overshoot, and it settled to a final average error of 0.0 degrees in approximately one second. The derivative gain was high enough to damp the response without slowing it down or amplifying noise. We adopted this configuration for all subsequent testing.
+
+Configuration 2: Kp = 0.06, Ki = 0.01, Kd = 0.01
+
+Adding an integral term introduced oscillation during the transient response that was not present in Configuration 1. The final average error was 0.4 degrees, which is acceptable, but the settling behavior was less clean. The higher derivative gain helped compensate for the oscillation, but we decided the slight accuracy improvement did not justify the added complexity of managing the integral term.
+
+Configuration 3: Kp = 0.06, Kd = 0.02, Ki = 0
+
+Increasing the derivative gain to 0.02 caused the controller to fail to settle during the entire test period. The final average error was -16.5 degrees. A derivative gain this large causes the controller to overreact to every small fluctuation in the noisy error signal, producing rapid back-and-forth motion in the servo. This configuration was discarded immediately.
+
+Figure 1. PD controller step response comparison
+
+These three results illustrate an important property of derivative control applied to noisy signals. The derivative term amplifies the rate of change of the error, which is useful for damping but dangerous if the error signal has high-frequency noise. Because the GCC-PHAT output inherently has some jitter, the derivative gain must be kept small. Configuration 1 found the right balance.
+
+Live Tracking Performance
+
+We tested the complete system by playing music from a JBL speaker placed at various positions around the Kinect and observing how well the servo tracked it.
+
+Within plus or minus 60 degrees of the center of the array, tracking was reliable. The servo identified the direction of the source and moved toward it, typically reaching the LOCKED state within one to two seconds of the sound starting. The smoothing and consistency filters kept the servo movement steady even when the acoustic environment changed.
+
+Beyond plus or minus 70 degrees from center, performance dropped off. This is a fundamental limitation of a linear microphone array. As the sound source approaches the end of the array, the time delay between microphones approaches its physical maximum. In this region, small errors in the delay estimate produce large errors in the computed angle because the derivative of the arcsin function grows steeply near its limits. The 0.9 ratio cutoff in the software handles this by rejecting measurements in that region and holding the servo at its last position until the source moves back into the reliable range.
+
+The state machine and filtering performed as designed during testing. The system correctly switched to IDLE when there was no sound and resumed tracking promptly when the source started again. The 0.5-second hold timer prevented spurious IDLE transitions during brief pauses. The three-sample consistency check successfully filtered out spikes caused by sudden incidental noises in the test environment.
+
+Visualizer Performance
+
+The visualizer proved to be one of the most useful parts of the project because it made the system's behavior easy to explain and demonstrate. The scrolling error timeline made it immediately obvious when the system was tracking well and when it was struggling. When tracking was good, the error trace stayed inside the green lock band and turned green. When the audio dropped out or the signal was weak, the error trace disappeared, which confirmed that the system was correctly suppressing output when there was insufficient signal rather than sending bad commands to the controller.
+
+The dB meter with its noise band coloring helped us calibrate the detection threshold for the room we were presenting in. Of all the visualizer elements, the dB meter was the most difficult to tune accurately, as the reading occasionally appeared offset from the actual perceived loudness in the room.
+
+Figure 2. Visualizer during active tracking
+
+
+Limitations and Future Work
+
+The primary limitation of the current system is that it only tracks sound on a single horizontal axis. Adding a tilt servo, which the pan-tilt bracket hardware supports, would allow the system to track sources that are above or below the plane of the microphone array. Using the cameras already built into the Kinect sensor bar would add depth sensing, enabling the system to estimate not just the direction but also the distance of the source. Both of these extensions would be straightforward to implement given the existing hardware and software architecture.
+
+
+
+
+V. Conclusion
+
+The goal of this project was to build and demonstrate a real-time audio source tracking system using an Xbox Kinect 360 sensor, an ItsyBitsy M4 microcontroller with a BNO055 IMU, and a pan servo motor. All stated goals were met. The GCC-PHAT algorithm produced reliable direction estimates for sources within approximately plus or minus 60 degrees of the sensor's center. The PD controller with Kp = 0.06 and Kd = 0.005 produced smooth, stable convergence with zero average steady-state error and no measurable overshoot. The PySide6/QML visualizer provided a real-time display of system state and tracking history that was effective for both development and demonstration.
+
+The project demonstrates that the signal processing and control concepts behind audio source tracking are accessible to anyone with modest hardware and open-source software. The system was built entirely from a secondhand Kinect sensor, a low-cost microcontroller, and freely available libraries. Every component of the design maps directly to topics covered in digital signal processing and control systems courses, making this a platform that other students can build on, modify, and learn from without any significant financial barrier.
