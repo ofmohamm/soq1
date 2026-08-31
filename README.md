@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 # SOQ
+=======
+# SOQ1
+>>>>>>> 10d88670a576594cb03bf2fc53030131e827f1c2
 
 SOQ is a Kinect-audio tracking demo with a live visualizer.
 
@@ -6,8 +10,13 @@ The system uses Kinect v1 microphone audio to estimate left/right source directi
 
 ## Hardware
 
+<<<<<<< HEAD
 - Kinect v1
 - Arduino-compatible controller
+=======
+- XBox Kinect 360
+- Arduino-compatible micro controller (Itsy Bitsy M4 in our case)
+>>>>>>> 10d88670a576594cb03bf2fc53030131e827f1c2
 - Adafruit BNO055 IMU
 - Pan servo
 - Host computer with USB access to Kinect and controller
