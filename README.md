@@ -10,7 +10,7 @@ A privacy-first acoustic tracking system. It finds the direction of a sound sour
 - **Stable under rotation** : fusing the acoustic estimate with IMU heading gives a bearing in world coordinates as the platform turns.
 - **Live visualizer** : a Qt desktop UI shows the direction in real time.
 
-https://github.com/user-attachments/assets/ff756a2f-59bf-4065-976a-f30c8f445255
+https://github.com/user-attachments/assets/730054fe-5365-48c3-b036-a59ecac2e4ce
 
 ## How it works
 
@@ -19,8 +19,7 @@ https://github.com/user-attachments/assets/ff756a2f-59bf-4065-976a-f30c8f445255
 **Time delay of arrival**
 
 - A sound reaching two microphones hits the closer one first, and that tiny delay tells you where it came from. 
-- The Kinect's four mics sit in a line at -0.113, -0.036, +0.036, and +0.113 meters.
-- I use the outer pair. A wider baseline means a bigger delay for the same angle, which is the best angular resolution the array can give.
+- The Kinect has four mics. I use the outer pair, as a wider baseline means a bigger delay for the same angle, which improves accuracy. 
 - Convert the delay with `sin(theta) = (tau * c) / d`, where c is 343 m/s and d is the 22.6 cm baseline.
 - Zero degrees is straight ahead, negative is left, positive is right.
 
@@ -60,4 +59,3 @@ https://github.com/user-attachments/assets/ff756a2f-59bf-4065-976a-f30c8f445255
 
 Credit: [Quintin Hatzis](https://www.linkedin.com/in/quintinhatzis/) and [Sawyer Falkenbush](https://www.linkedin.com/in/sawyer-falkenbush/) for collaborating with me on this project
 
-A linear array cannot tell front from back. A source at +theta in front produces the same delays as one at +theta behind, so the geometry has to be known ahead of time. Channel order also matters more than it looks. If the mic indices are mirrored relative to physical position, every angle comes out mirrored, and the only way to catch it is to clap from a known side and check the sign before trusting anything downstream.
