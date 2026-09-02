@@ -57,5 +57,4 @@ https://github.com/user-attachments/assets/730054fe-5365-48c3-b036-a59ecac2e4ce
 - Channel order matters more than it looks. If the mic indices are mirrored relative to physical position, every angle comes out mirrored.
 - The only way to catch that is to clap from a known side and check the sign before trusting anything downstream.
 
-Credit: [Quintin Hatzis](https://www.linkedin.com/in/quintinhatzis/) and [Sawyer Falkenbush](https://www.linkedin.com/in/sawyer-falkenbush/) for collaborating with me on this project
-
+Credit: [Quintin Hatzis](https://www.linkedin.com/in/quintinhatzis/) and [Sawyer Falkenbush](https://www.linkedin.com/in/sawyer-falkenbush/) for collaborating with me on this project.
