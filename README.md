@@ -10,7 +10,7 @@ A privacy-first acoustic tracking system. It finds the direction of a sound sour
 - **Stable under rotation** : fusing the acoustic estimate with IMU heading gives a bearing in world coordinates as the platform turns.
 - **Live visualizer** : a Qt desktop UI shows the direction in real time.
 
-https://github.com/user-attachments/assets/04de4f05-42b1-4f82-b35f-65400cd1e701
+https://github.com/user-attachments/assets/ff756a2f-59bf-4065-976a-f30c8f445255
 
 ## How it works
 
