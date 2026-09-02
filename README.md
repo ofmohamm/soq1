@@ -1,89 +1,63 @@
-<<<<<<< HEAD
-# SOQ
-=======
 # SOQ1
->>>>>>> 10d88670a576594cb03bf2fc53030131e827f1c2
 
-SOQ is a Kinect-audio tracking demo with a live visualizer.
+A privacy-first acoustic tracking system. It finds the direction of a sound source from a microphone array and points a servo at it, without recording audio or sending anything off the machine.
 
-The system uses Kinect v1 microphone audio to estimate left/right source direction, reads absolute heading from a pan-mounted IMU controller, and renders the result in a Qt visualizer.
+### Features
 
-## Hardware
+- **Local only** : audio never leaves the machine. Capture, processing, and display all run on the host.
+- **Direction, not content** : the estimator throws away everything except phase, so no speech or other audio information is captured. 
+- **Nothing written to disk** : frames are processed in memory and immediately discarded. 
+- **Stable under rotation** : fusing the acoustic estimate with IMU heading gives a bearing in world coordinates as the platform turns.
+- **Live visualizer** : a Qt desktop UI shows the direction in real time.
 
-<<<<<<< HEAD
-- Kinect v1
-- Arduino-compatible controller
-=======
-- XBox Kinect 360
-- Arduino-compatible micro controller (Itsy Bitsy M4 in our case)
->>>>>>> 10d88670a576594cb03bf2fc53030131e827f1c2
-- Adafruit BNO055 IMU
-- Pan servo
-- Host computer with USB access to Kinect and controller
-- USB cables and power as required for the controller/servo setup
+https://github.com/user-attachments/assets/04de4f05-42b1-4f82-b35f-65400cd1e701
 
-The controller firmware lives in `soqv1/soqv1.ino`.
+## How it works
 
-## Project Files
+<img width="845" height="654" alt="image" src="https://github.com/user-attachments/assets/12e65b35-52e2-4d48-9f5d-b5b0b3a60d77" />
 
-- `read_kinect.py`: reads Kinect audio from `audio_capture`, reads IMU heading over serial, and sends telemetry to the visualizer
-- `visualizer.py`: Qt/PySide6 desktop visualizer
-- `ui/`: QML UI for the visualizer
-- `libfreenect/examples/audio_capture.c`: Kinect audio capture program
-- `soqv1/soqv1.ino`: controller firmware for servo + BNO055 heading reporting
+**Time delay of arrival**
 
-## Software Requirements
+- A sound reaching two microphones hits the closer one first, and that tiny delay tells you where it came from. 
+- The Kinect's four mics sit in a line at -0.113, -0.036, +0.036, and +0.113 meters.
+- I use the outer pair. A wider baseline means a bigger delay for the same angle, which is the best angular resolution the array can give.
+- Convert the delay with `sin(theta) = (tau * c) / d`, where c is 343 m/s and d is the 22.6 cm baseline.
+- Zero degrees is straight ahead, negative is left, positive is right.
 
-- Python 3
-- `numpy`
-- `pyserial`
-- `PySide6`
-- `libfreenect` built locally so `audio_capture` can run
+**GCC-PHAT**
 
-Example Python install:
+- Measuring the delay is the hardest part. Plain cross-correlation doesn't operate as well in a normal room, as reflections get picked up as new sources.
+- GCC-PHAT takes the cross-power spectrum of the two channels and divides it by its own magnitude. 
+- It flattens the spectrum so every frequency contributes equally, which sharpens the correlation peak and recognizes the reverberations as noise.
+- It also discards loudness. Only the phase relationship between the two mics survives into the estimate, which is why the system can track you without capturing what you said.
 
-```bash
-pip install numpy pyserial PySide6
-```
+**Input conditioning**
 
-## Before You Run
+- Bandpass 300 to 3000 Hz. Covers speech and claps, rejects HVAC hum on the low end and hiss on the high end.
+- RMS energy gate skips quiet frames, so the system stops chasing the correlation of room noise when nobody is talking.
+- Lag search bounded to physically possible delays, plus or minus d/c. Throws out a whole class of spurious peaks for free.
+- Exponential moving average on the angle output, so the servo tracks instead of twitching.
 
-Set the controller serial port in `read_kinect.py`:
+**IMU Header**
 
-```python
-SERIAL_PORT = "/dev/cu.usbmodem1301"
-```
+- An acoustic array only measures direction relative to where it is currently facing, which stops being useful the moment the rig starts moving.
+- The BNO055 reports absolute heading over serial in the range 0 to 360.
+- Fusing that with the acoustic estimate gives a bearing in world coordinates that stays correct while the platform rotates.
+- The same microcontroller that reports heading also drives the pan servo, so sensing and actuation live on one board.
 
-Make sure that path matches your machine.
+**Process architecture**
 
-You also need a built `audio_capture` binary from `libfreenect/examples/`.
-
-## How To Run
-
-Start the visualizer in one terminal:
-
-```bash
-python visualizer.py
-```
-
-Start Kinect audio capture and tracking in a second terminal:
-
-```bash
-./libfreenect/examples/audio_capture | python read_kinect.py
-```
-
-If your Python is in a virtual environment, use that interpreter instead.
-
-## Runtime Flow
-
-1. `audio_capture` streams 4-channel Kinect microphone audio to stdout.
-2. `read_kinect.py` computes audio direction from the outer microphone pair.
-3. `read_kinect.py` reads heading data from the controller over serial.
-4. `read_kinect.py` sends telemetry to `127.0.0.1:5555`.
-5. `visualizer.py` receives that telemetry and renders the UI.
+- Three processes, two hops. A C capture program built on libfreenect streams four channels of audio to stdout.
+- The Python processor reads that off an ordinary pipe, then sends telemetry to the visualizer over loopback UDP.
+- The visualizer can be attached, detached, or restarted without touching capture or servo control.
+- A dropped datagram degrades the display instead of stalling the control loop. For soft-real-time telemetry that tradeoff is the right one.
 
 ## Notes
 
-- The visualizer listens on local UDP port `5555`.
-- The controller reports heading as `0..360`, and the visualizer remaps it for display.
-- `libfreenect` is included in this repo because the Kinect audio capture path depends on it.
+- A linear array cannot tell front from back. A source at +theta in front produces the same delays as one at +theta behind, so the geometry has to be known ahead of time.
+- Channel order matters more than it looks. If the mic indices are mirrored relative to physical position, every angle comes out mirrored.
+- The only way to catch that is to clap from a known side and check the sign before trusting anything downstream.
+
+Credit: [Quintin Hatzis](https://www.linkedin.com/in/quintinhatzis/) and [Sawyer Falkenbush](https://www.linkedin.com/in/sawyer-falkenbush/) for collaborating with me on this project
+
+A linear array cannot tell front from back. A source at +theta in front produces the same delays as one at +theta behind, so the geometry has to be known ahead of time. Channel order also matters more than it looks. If the mic indices are mirrored relative to physical position, every angle comes out mirrored, and the only way to catch it is to clap from a known side and check the sign before trusting anything downstream.
